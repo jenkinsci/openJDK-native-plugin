@@ -53,9 +53,14 @@ public class OpenJDKInstaller extends ToolInstaller{
     }
     
     public FilePath performInstallation(ToolInstallation tool, Node node, TaskListener log) throws IOException, InterruptedException {
-        boolean installed = isInstalled(node, log, openjdkPackage);
+        boolean installed = isInstalled(node, log, openjdkPackage, false);
         if(!installed)
-            installViaYum(node, log);
+            installViaYum(node, log, false);
+
+        installed = isInstalled(node, log, openjdkPackage, true);
+        if (!installed)
+            installViaYum(node, log, true);
+
         switchAlternatives(node, log);
         return new FilePath(node.getChannel(), OPENJDK_BIN);  //if local (on master), channel is null
     }
@@ -78,7 +83,7 @@ public class OpenJDKInstaller extends ToolInstaller{
         }
     }
     
-    private boolean isInstalled(Node node, TaskListener log, OpenJDKPackage openjdkPackage){
+    private boolean isInstalled(Node node, TaskListener log, OpenJDKPackage openjdkPackage, boolean devel){
         log.getLogger().println("Checking OpenJDK installation...");
         if (node == null)
             throw new IllegalArgumentException("must pass non-null node");
@@ -90,8 +95,9 @@ public class OpenJDKInstaller extends ToolInstaller{
             FilePath rhRelease = new FilePath(node.getChannel(),"/etc/redhat-release");
             if(!rhRelease.exists())
                 throw new IllegalArgumentException("Node " + node.getDisplayName() + " doesn't seem to be running on RedHat-like distro");
-            exitStatus  = l.launch().cmds("rpm", "-q", openjdkPackage.getPackageName()).stdout(output).join() + 
-                    l.launch().cmds("rpm", "-q", openjdkPackage.getDevelPackageName()).stdout(output).join();
+            
+            String packageName = devel ? openjdkPackage.getDevelPackageName() : openjdkPackage.getPackageName();
+            exitStatus  = l.launch().cmds("rpm", "-q", packageName).stdout(output).join();
         } catch (IOException e){
             e.printStackTrace();
         } catch (InterruptedException e){
@@ -100,23 +106,17 @@ public class OpenJDKInstaller extends ToolInstaller{
         return (exitStatus == 0);
     }
     
-    private void installViaYum(Node node, TaskListener log){
+    private void installViaYum(Node node, TaskListener log, boolean devel){
         log.getLogger().print(openjdkPackage.getPackageName() + " not installed, trying to install via yum ..." );
         Launcher l = node.createLauncher(log);
         try{
             PrintStream output = log.getLogger();
-            int exitStatus  = l.launch().cmds("sudo", "yum", "-y", "install", openjdkPackage.getPackageName()).stdout(output).join();
+            String packageName = devel ? openjdkPackage.getDevelPackageName() : openjdkPackage.getPackageName();
+            int exitStatus  = l.launch().cmds("sudo", "yum", "-y", "install", packageName).stdout(output).join();
             if(exitStatus != 0){
                 OpenJDKConsoleAnnotator annotator = new OpenJDKConsoleAnnotator(log.getLogger());
                 byte[] errMsg = ("[OpenJDK ERROR] Installation of " + openjdkPackage.getPackageName() + " failed!").getBytes(Charset.defaultCharset());
                 annotator.eol(errMsg,errMsg.length);
-            }
-            exitStatus = l.launch().cmds("sudo", "yum", "-y", "install", openjdkPackage.getDevelPackageName()).stdout(output).join();
-            if (exitStatus != 0) {
-                OpenJDKConsoleAnnotator annotator = new OpenJDKConsoleAnnotator(log.getLogger());
-                byte[] errMsg = ("[OpenJDK ERROR] Installation of " + openjdkPackage.getDevelPackageName() + " failed!")
-                        .getBytes(Charset.defaultCharset());
-                annotator.eol(errMsg, errMsg.length);
             }
         } catch (IOException e){
             e.printStackTrace();
