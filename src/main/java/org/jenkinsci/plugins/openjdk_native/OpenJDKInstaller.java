@@ -90,7 +90,8 @@ public class OpenJDKInstaller extends ToolInstaller{
             FilePath rhRelease = new FilePath(node.getChannel(),"/etc/redhat-release");
             if(!rhRelease.exists())
                 throw new IllegalArgumentException("Node " + node.getDisplayName() + " doesn't seem to be running on RedHat-like distro");
-            exitStatus  = l.launch().cmds("rpm", "-q", openjdkPackage.getPackageName()).stdout(output).join();
+            exitStatus  = l.launch().cmds("rpm", "-q", openjdkPackage.getPackageName()).stdout(output).join() + 
+                    l.launch().cmds("rpm", "-q", openjdkPackage.getDevelPackageName()).stdout(output).join();
         } catch (IOException e){
             e.printStackTrace();
         } catch (InterruptedException e){
@@ -109,6 +110,13 @@ public class OpenJDKInstaller extends ToolInstaller{
                 OpenJDKConsoleAnnotator annotator = new OpenJDKConsoleAnnotator(log.getLogger());
                 byte[] errMsg = ("[OpenJDK ERROR] Installation of " + openjdkPackage.getPackageName() + " failed!").getBytes(Charset.defaultCharset());
                 annotator.eol(errMsg,errMsg.length);
+            }
+            exitStatus = l.launch().cmds("sudo", "yum", "-y", "install", openjdkPackage.getDevelPackageName()).stdout(output).join();
+            if (exitStatus != 0) {
+                OpenJDKConsoleAnnotator annotator = new OpenJDKConsoleAnnotator(log.getLogger());
+                byte[] errMsg = ("[OpenJDK ERROR] Installation of " + openjdkPackage.getDevelPackageName() + " failed!")
+                        .getBytes(Charset.defaultCharset());
+                annotator.eol(errMsg, errMsg.length);
             }
         } catch (IOException e){
             e.printStackTrace();
@@ -159,6 +167,10 @@ public class OpenJDKInstaller extends ToolInstaller{
         
         public String getPackageName(){
             return packageName;
+        }
+
+        public String getDevelPackageName() {
+            return packageName + "-devel";
         }
         
         public String getJreName(){
